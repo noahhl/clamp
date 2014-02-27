@@ -2,9 +2,9 @@ package clamp
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -35,11 +35,11 @@ func NewServer(name string, addr string) *Server {
 }
 
 func (s *Server) processBytes(buf []byte) {
-	pieces := bytes.Split(buf, []byte{'\n'})
+	pieces := strings.Split(string(buf), "\n")
 	for i := range pieces {
 		if len(pieces[i]) > 0 {
 			select {
-			case s.messageChannel <- string(bytes.TrimSpace(pieces[i])):
+			case s.messageChannel <- strings.TrimSpace(pieces[i]):
 				s.numProcessed += 1
 			default:
 				s.numDropped += 1

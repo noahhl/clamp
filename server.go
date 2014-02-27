@@ -39,7 +39,7 @@ func (s *Server) processBytes(buf []byte) {
 	for i := range pieces {
 		if len(pieces[i]) > 0 {
 			select {
-			case s.messageChannel <- strings.TrimSpace(pieces[i]):
+			case s.messageChannel <- pieces[i]:
 				s.numProcessed += 1
 			default:
 				s.numDropped += 1

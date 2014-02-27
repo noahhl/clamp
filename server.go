@@ -2,96 +2,82 @@ package clamp
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"net"
-	"strings"
 	"time"
 )
 
 const readLen = 8196
 const channelBufferSize = 50000
 
-func StartDualServer(address string) chan string {
-
-	udp_server := StartUDPServer(address)
-	tcp_server := StartTCPServer(address)
-	messageChannel := make(chan string, channelBufferSize)
-
-	go func() {
-		for {
-			select {
-			case msg := <-udp_server:
-				messageChannel <- msg
-			case msg := <-tcp_server:
-				messageChannel <- msg
-			}
-		}
-	}()
-	return messageChannel
-
+type Server struct {
+	messageChannel chan string
+	name           string
+	addr           string
+	numProcessed   int
+	numDropped     int
 }
 
-func StartUDPServer(address string) chan string {
-	messageChannel := make(chan string, channelBufferSize)
-
-	numProcessed := 0
-	numDropped := 0
+func NewServer(name string, addr string) *Server {
+	ch := make(chan string, channelBufferSize)
+	s := Server{ch, name, addr, 0, 0}
 	go func() {
 		c := time.Tick(5 * time.Second)
 		for {
 			<-c
-			StatsChannel <- Stat{"udpServerProcessed", fmt.Sprintf("%v", numProcessed)}
-			StatsChannel <- Stat{"udpServerDropped", fmt.Sprintf("%v", numDropped)}
+			StatsChannel <- Stat{s.name + "ServerProcessed", fmt.Sprintf("%v", s.numProcessed)}
+			StatsChannel <- Stat{s.name + "ServerDropped", fmt.Sprintf("%v", s.numDropped)}
 		}
 	}()
 
+	return &s
+}
+
+func (s *Server) processBytes(buf []byte) {
+	pieces := bytes.Split(buf, []byte{'\n'})
+	for i := range pieces {
+		if len(pieces[i]) > 0 {
+			select {
+			case s.messageChannel <- string(bytes.TrimSpace(pieces[i])):
+				s.numProcessed += 1
+			default:
+				s.numDropped += 1
+				fmt.Printf("%v: dropped a message on the %v input server, channel couldn't keep up\n", time.Now(), s.name)
+			}
+		}
+	}
+}
+
+func (s *Server) listenUDP() {
 	go func() {
-		server, err := net.ListenPacket("udp", address)
+		listener, err := net.ListenPacket("udp", s.addr)
 
 		if err != nil {
 			panic(err)
 		}
 
-		defer server.Close()
+		defer listener.Close()
 		buffer := make([]byte, readLen)
 		for {
-			n, _, err := server.ReadFrom(buffer)
+			n, _, err := listener.ReadFrom(buffer)
 			if err != nil {
 				continue
 			}
-			select {
-			case messageChannel <- strings.TrimSpace(strings.Replace(string(buffer[0:n]), "\n", "", -1)):
-				numProcessed += 1
-			default:
-				numDropped += 1
-				fmt.Printf("%v: dropped a message on the UDP input server, channel couldn't keep up\n", time.Now())
-			}
+			s.processBytes(buffer[0:n])
 		}
 	}()
-	return messageChannel
+
 }
 
-func StartTCPServer(address string) chan string {
-	messageChannel := make(chan string, channelBufferSize)
-
-	numProcessed := 0
-	numDropped := 0
-	go func() {
-		c := time.Tick(5 * time.Second)
-		for {
-			<-c
-			StatsChannel <- Stat{"tcpServerProcessed", fmt.Sprintf("%v", numProcessed)}
-			StatsChannel <- Stat{"tcpServerDropped", fmt.Sprintf("%v", numDropped)}
-		}
-	}()
-
+func (s *Server) listenTCP() {
 	go func() {
 
-		server, err := net.Listen("tcp", address)
+		listener, err := net.Listen("tcp", s.addr)
 		if err != nil {
 			panic(err)
 		}
-		conns := clientTCPConns(server)
+		conns := s.clientTCPConns(listener)
 		for {
 			go func(client net.Conn) {
 				b := bufio.NewReader(client)
@@ -100,21 +86,15 @@ func StartTCPServer(address string) chan string {
 					if err != nil {
 						return
 					}
-					select {
-					case messageChannel <- strings.TrimSpace(strings.Replace(string(line), "\n", "", -1)):
-						numProcessed += 1
-					default:
-						fmt.Printf("%v: dropped a message on the TCP input server, channel couldn't keep up\n", time.Now())
-						numDropped += 1
-					}
+					s.processBytes(line)
 				}
 			}(<-conns)
 		}
 	}()
-	return messageChannel
+
 }
 
-func clientTCPConns(listener net.Listener) chan net.Conn {
+func (s *Server) clientTCPConns(listener net.Listener) chan net.Conn {
 	ch := make(chan net.Conn)
 	go func() {
 		for {
@@ -127,4 +107,23 @@ func clientTCPConns(listener net.Listener) chan net.Conn {
 		}
 	}()
 	return ch
+}
+
+func StartUDPServer(address string) chan string {
+	server := NewServer("udp", address)
+	server.listenUDP()
+	return server.messageChannel
+}
+
+func StartTCPServer(address string) chan string {
+	server := NewServer("tcp", address)
+	server.listenTCP()
+	return server.messageChannel
+}
+
+func StartDualServer(address string) chan string {
+	server := NewServer("dual", address)
+	server.listenUDP()
+	server.listenTCP()
+	return server.messageChannel
 }

@@ -49,3 +49,64 @@ func TestUDPServer(t *testing.T) {
 	}
 
 }
+
+func TestTCPServer(t *testing.T) {
+	messageChannel := StartTCPServer("127.0.0.1:8125")
+	time.Sleep(500 * time.Millisecond)
+	client, err := net.Dial("tcp", "127.0.0.1:8125")
+	if err != nil {
+		panic(err)
+	}
+	defer client.Close()
+	client.Write([]byte("test\n"))
+
+	time.Sleep(10 * time.Millisecond)
+	if len(messageChannel) != 1 {
+		t.Errorf("expected one message in channel, got %v\n", len(messageChannel))
+	}
+
+	message := <-messageChannel
+	if message != "test" {
+		t.Errorf("expected message to be 'test', was '%v'\n", message)
+	}
+}
+
+func TestDualServer(t *testing.T) {
+	time.Sleep(500 * time.Millisecond)
+	messageChannel := StartDualServer("127.0.0.1:8126")
+	time.Sleep(500 * time.Millisecond)
+	tcpClient, err := net.Dial("tcp", "127.0.0.1:8126")
+	if err != nil {
+		panic(err)
+	}
+	defer tcpClient.Close()
+	tcpClient.Write([]byte("tcp_test\n"))
+
+	time.Sleep(10 * time.Millisecond)
+	if len(messageChannel) != 1 {
+		t.Errorf("expected one message in channel, got %v\n", len(messageChannel))
+	}
+
+	message := <-messageChannel
+	if message != "tcp_test" {
+		t.Errorf("expected message to be 'tcp_test', was '%v'\n", message)
+	}
+
+	udpClient, err := net.Dial("udp", "127.0.0.1:8126")
+	if err != nil {
+		panic(err)
+	}
+	defer udpClient.Close()
+	udpClient.Write([]byte("udp_test\n"))
+
+	time.Sleep(10 * time.Millisecond)
+	if len(messageChannel) != 1 {
+		t.Errorf("expected one message in channel, got %v\n", len(messageChannel))
+	}
+
+	message = <-messageChannel
+	if message != "udp_test" {
+		t.Errorf("expected message to be 'udp_test', was '%v'\n", message)
+	}
+
+}

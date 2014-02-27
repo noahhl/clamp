@@ -74,6 +74,7 @@ func (s *Server) listenTCP() {
 	go func() {
 
 		listener, err := net.Listen("tcp", s.addr)
+		defer listener.Close()
 		if err != nil {
 			panic(err)
 		}

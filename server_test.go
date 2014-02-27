@@ -110,3 +110,18 @@ func TestDualServer(t *testing.T) {
 	}
 
 }
+
+func BenchmarkMessageParsing(b *testing.B) {
+	s := NewServer("test", ":8125")
+	go func() {
+		for {
+			select {
+			case _ = <-s.messageChannel:
+			default:
+			}
+		}
+	}()
+	for j := 0; j < b.N; j++ {
+		s.processBytes([]byte("foo\nbar\nbazalskdfjalskdfjalsdfjka\n"))
+	}
+}

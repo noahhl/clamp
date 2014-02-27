@@ -1,16 +1,9 @@
-Go-Batsd 
+Clamp
 ======
-
-Batsd is a Golang-based daemon for aggregating and storing statistics. It targets
-"wireline" compatibility with [Etsy's StatsD
-implementation](https://github.com/etsy/statsd), which they described in
-a [blog post](http://codeascraft.etsy.com/2011/02/15/measure-anything-measure-everything/).
-
-It's very similar to https://github.com/noahhl/batsd, which is written in Ruby.
 
 # License
 
- Copyright (c) 2013 Noah Lorang
+ Copyright (c) 2014 Noah Lorang, Basecamp LLC
 
  Permission is hereby granted, free of charge, to any person obtaining
  a copy of this software and associated documentation files (the

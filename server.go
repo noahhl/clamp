@@ -40,8 +40,8 @@ func StartUDPServer(address string) chan string {
 		c := time.Tick(5 * time.Second)
 		for {
 			<-c
-			statsChan <- Stat{"udpServerProcessed", fmt.Sprintf("%v", numProcessed)}
-			statsChan <- Stat{"udpServerDropped", fmt.Sprintf("%v", numDropped)}
+			StatsChannel <- Stat{"udpServerProcessed", fmt.Sprintf("%v", numProcessed)}
+			StatsChannel <- Stat{"udpServerDropped", fmt.Sprintf("%v", numDropped)}
 		}
 	}()
 
@@ -80,8 +80,8 @@ func StartTCPServer(address string) chan string {
 		c := time.Tick(5 * time.Second)
 		for {
 			<-c
-			statsChan <- Stat{"tcpServerProcessed", fmt.Sprintf("%v", numProcessed)}
-			statsChan <- Stat{"tcpServerDropped", fmt.Sprintf("%v", numDropped)}
+			StatsChannel <- Stat{"tcpServerProcessed", fmt.Sprintf("%v", numProcessed)}
+			StatsChannel <- Stat{"tcpServerDropped", fmt.Sprintf("%v", numDropped)}
 		}
 	}()
 

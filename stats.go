@@ -12,15 +12,15 @@ type Stat struct {
 	Value string
 }
 
-var statsChan chan Stat
+var StatsChannel chan Stat
 
 func StartStatsServer(statsAddr string) chan Stat {
-	statsChan = make(chan Stat, 100)
+	StatsChannel = make(chan Stat, 100)
 	stats := make(map[string]string, 10)
 	stats["startupTime"] = time.Now().String()
 
 	go func() {
-		for stat := range statsChan {
+		for stat := range StatsChannel {
 			stats[stat.Key] = stat.Value
 		}
 	}()
@@ -32,5 +32,5 @@ func StartStatsServer(statsAddr string) chan Stat {
 
 	go http.ListenAndServe(statsAddr, nil)
 	fmt.Printf("%v: Started stats server\n", time.Now())
-	return statsChan
+	return StatsChannel
 }

@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const readLen = 2048
+const readLen = 8196
 const channelBufferSize = 50000
 
 func StartDualServer(address string) chan string {

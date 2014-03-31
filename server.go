@@ -28,6 +28,7 @@ func NewServer(name string, addr string) *Server {
 			<-c
 			StatsChannel <- Stat{s.name + "ServerProcessed", fmt.Sprintf("%v", s.numProcessed)}
 			StatsChannel <- Stat{s.name + "ServerDropped", fmt.Sprintf("%v", s.numDropped)}
+			StatsChannel <- Stat{s.name + "MessageChannelSize", fmt.Sprintf("%v", len(s.messageChannel))}
 		}
 	}()
 

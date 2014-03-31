@@ -9,7 +9,7 @@ import (
 )
 
 const readLen = 8196
-const channelBufferSize = 500000
+const channelBufferSize = 2000000
 
 type Server struct {
 	messageChannel chan string

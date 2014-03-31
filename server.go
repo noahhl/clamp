@@ -23,7 +23,7 @@ func NewServer(name string, addr string) *Server {
 	ch := make(chan string, channelBufferSize)
 	s := Server{ch, name, addr, 0, 0}
 	go func() {
-		c := time.Tick(5 * time.Second)
+		c := time.Tick(1 * time.Second)
 		for {
 			<-c
 			StatsChannel <- Stat{s.name + "ServerProcessed", fmt.Sprintf("%v", s.numProcessed)}

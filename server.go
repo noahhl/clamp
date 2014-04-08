@@ -60,18 +60,12 @@ func (s *Server) listenUDP() {
 
 		defer listener.Close()
 		buffer := make([]byte, readLen)
-		c := make(chan []byte)
-		go func() {
-			for bytes := range c {
-				s.processBytes(bytes)
-			}
-		}()
 		for {
 			n, _, err := listener.ReadFrom(buffer)
 			if err != nil {
 				continue
 			}
-			c <- buffer[0:n]
+			s.processBytes(buffer[0:n])
 		}
 	}()
 

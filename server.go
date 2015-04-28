@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const readLen = 8196
+const readLen = 16392
 const channelBufferSize = 2000000
 
 type Server struct {
@@ -17,11 +17,12 @@ type Server struct {
 	addr           string
 	numProcessed   int
 	numDropped     int
+	Explode bool
 }
 
 func NewServer(name string, addr string) *Server {
 	ch := make(chan string, channelBufferSize)
-	s := Server{ch, name, addr, 0, 0}
+	s := Server{ch, name, addr, 0, 0, false}
 	go func() {
 		c := time.Tick(1 * time.Second)
 		for {
@@ -44,7 +45,11 @@ func (s *Server) processBytes(buf []byte) {
 				s.numProcessed += 1
 			default:
 				s.numDropped += 1
-				fmt.Printf("%v: dropped a message on the %v input server, channel couldn't keep up\n", time.Now(), s.name)
+				if s.Explode {
+				  panic(fmt.Sprintf("%v: dropped a message on the %v input server, channel couldn't keep up\n", time.Now(), s.name))
+				} else { 
+				  fmt.Printf("%v: dropped a message on the %v input server, channel couldn't keep up\n", time.Now(), s.name)
+				}
 			}
 		}
 	}
@@ -127,5 +132,13 @@ func StartDualServer(address string) chan string {
 	server := NewServer("dual", address)
 	server.listenUDP()
 	server.listenTCP()
+	return server.messageChannel
+}
+
+func StartExplodingDualServer(address string) chan string {
+	server := NewServer("dual", address)
+	server.listenUDP()
+	server.listenTCP()
+	server.Explode = true 
 	return server.messageChannel
 }

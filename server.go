@@ -6,30 +6,32 @@ import (
 	"net"
 	"strings"
 	"time"
+	"os"
 )
 
 const readLen = 16392
 const channelBufferSize = 2000000
 
 type Server struct {
-	messageChannel chan string
+	MessageChannel chan string
 	name           string
 	addr           string
 	numProcessed   int
 	numDropped     int
 	Explode bool
+	Delim string
 }
 
 func NewServer(name string, addr string) *Server {
 	ch := make(chan string, channelBufferSize)
-	s := Server{ch, name, addr, 0, 0, false}
+	s := Server{ch, name, addr, 0, 0, false, "\n"}
 	go func() {
 		c := time.Tick(1 * time.Second)
 		for {
 			<-c
 			StatsChannel <- Stat{s.name + "ServerProcessed", fmt.Sprintf("%v", s.numProcessed)}
 			StatsChannel <- Stat{s.name + "ServerDropped", fmt.Sprintf("%v", s.numDropped)}
-			StatsChannel <- Stat{s.name + "MessageChannelSize", fmt.Sprintf("%v", len(s.messageChannel))}
+			StatsChannel <- Stat{s.name + "MessageChannelSize", fmt.Sprintf("%v", len(s.MessageChannel))}
 		}
 	}()
 
@@ -37,16 +39,17 @@ func NewServer(name string, addr string) *Server {
 }
 
 func (s *Server) processBytes(buf []byte) {
-	pieces := strings.Split(string(buf), "\n")
+	pieces := strings.Split(string(buf), s.Delim)
 	for i := range pieces {
 		if len(pieces[i]) > 0 {
 			select {
-			case s.messageChannel <- pieces[i]:
+			case s.MessageChannel <- pieces[i]:
 				s.numProcessed += 1
 			default:
 				s.numDropped += 1
 				if s.Explode {
-				  panic(fmt.Sprintf("%v: dropped a message on the %v input server, channel couldn't keep up\n", time.Now(), s.name))
+				  fmt.Printf("%v: dropped a message on the %v input server, channel couldn't keep up\n", time.Now(), s.name)
+				  os.Exit(2)
 				} else { 
 				  fmt.Printf("%v: dropped a message on the %v input server, channel couldn't keep up\n", time.Now(), s.name)
 				}
@@ -85,15 +88,16 @@ func (s *Server) listenTCP() {
 			panic(err)
 		}
 		conns := s.clientTCPConns(listener)
+		buffer := make([]byte, readLen)
 		for {
 			go func(client net.Conn) {
 				b := bufio.NewReader(client)
 				for {
-					line, err := b.ReadBytes('\n')
+					n, err := b.Read(buffer)
 					if err != nil {
 						return
 					}
-					s.processBytes(line)
+					s.processBytes(buffer[0:n])
 				}
 			}(<-conns)
 		}
@@ -119,20 +123,27 @@ func (s *Server) clientTCPConns(listener net.Listener) chan net.Conn {
 func StartUDPServer(address string) chan string {
 	server := NewServer("udp", address)
 	server.listenUDP()
-	return server.messageChannel
+	return server.MessageChannel
 }
 
 func StartTCPServer(address string) chan string {
 	server := NewServer("tcp", address)
 	server.listenTCP()
-	return server.messageChannel
+	return server.MessageChannel
 }
 
 func StartDualServer(address string) chan string {
 	server := NewServer("dual", address)
 	server.listenUDP()
 	server.listenTCP()
-	return server.messageChannel
+	return server.MessageChannel
+}
+
+func NewDualServer(address string) *Server {
+	server := NewServer("dual", address)
+	server.listenUDP()
+	server.listenTCP()
+	return server
 }
 
 func StartExplodingDualServer(address string) chan string {
@@ -140,5 +151,5 @@ func StartExplodingDualServer(address string) chan string {
 	server.listenUDP()
 	server.listenTCP()
 	server.Explode = true 
-	return server.messageChannel
+	return server.MessageChannel
 }

@@ -3,13 +3,14 @@ package clamp
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"net"
+	"os"
 	"strings"
 	"time"
-	"os"
 )
 
-const readLen = 16392
+const readLen = 102400
 const channelBufferSize = 2000000
 
 type Server struct {
@@ -18,8 +19,8 @@ type Server struct {
 	addr           string
 	numProcessed   int
 	numDropped     int
-	Explode bool
-	Delim string
+	Explode        bool
+	Delim          string
 }
 
 func NewServer(name string, addr string) *Server {
@@ -48,10 +49,10 @@ func (s *Server) processBytes(buf []byte) {
 			default:
 				s.numDropped += 1
 				if s.Explode {
-				  fmt.Printf("%v: dropped a message on the %v input server, channel couldn't keep up\n", time.Now(), s.name)
-				  os.Exit(2)
-				} else { 
-				  fmt.Printf("%v: dropped a message on the %v input server, channel couldn't keep up\n", time.Now(), s.name)
+					fmt.Printf("%v: dropped a message on the %v input server, channel couldn't keep up\n", time.Now(), s.name)
+					os.Exit(2)
+				} else {
+					fmt.Printf("%v: dropped a message on the %v input server, channel couldn't keep up\n", time.Now(), s.name)
 				}
 			}
 		}
@@ -82,22 +83,32 @@ func (s *Server) listenUDP() {
 func (s *Server) listenTCP() {
 	go func() {
 
-		listener, err := net.Listen("tcp", s.addr)
+		addr, err := net.ResolveTCPAddr("tcp", s.addr)
+		if err != nil {
+			panic(err)
+		}
+		listener, err := net.ListenTCP("tcp", addr)
 		defer listener.Close()
 		if err != nil {
 			panic(err)
 		}
 		conns := s.clientTCPConns(listener)
-		buffer := make([]byte, readLen)
 		for {
-			go func(client net.Conn) {
-				b := bufio.NewReader(client)
+			go func(client *net.TCPConn) {
+				b := bufio.NewReaderSize(client, readLen)
 				for {
-					n, err := b.Read(buffer)
-					if err != nil {
-						return
+					buffer := make([]byte, 0)
+					for len(buffer) < readLen && (len(buffer) < len(s.Delim) || string(buffer[(len(buffer)-len(s.Delim)):len(buffer)]) != s.Delim) {
+						tmp_buf := make([]byte, readLen)
+						n, err := b.Read(tmp_buf)
+						if err != nil && err != io.EOF {
+							return
+						} else if err == io.EOF {
+							break
+						}
+						buffer = append(buffer, tmp_buf[0:n]...)
 					}
-					s.processBytes(buffer[0:n])
+					s.processBytes(buffer)
 				}
 			}(<-conns)
 		}
@@ -105,11 +116,11 @@ func (s *Server) listenTCP() {
 
 }
 
-func (s *Server) clientTCPConns(listener net.Listener) chan net.Conn {
-	ch := make(chan net.Conn)
+func (s *Server) clientTCPConns(listener *net.TCPListener) chan *net.TCPConn {
+	ch := make(chan *net.TCPConn)
 	go func() {
 		for {
-			client, err := listener.Accept()
+			client, err := listener.AcceptTCP()
 			if client == nil {
 				fmt.Printf("couldn't accept: %v", err)
 				continue
@@ -150,6 +161,6 @@ func StartExplodingDualServer(address string) chan string {
 	server := NewServer("dual", address)
 	server.listenUDP()
 	server.listenTCP()
-	server.Explode = true 
+	server.Explode = true
 	return server.MessageChannel
 }

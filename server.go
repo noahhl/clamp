@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const readLen = 102400
+const readLen = 256 * 1024
 const channelBufferSize = 2000000
 
 type Server struct {

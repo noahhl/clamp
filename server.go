@@ -96,12 +96,18 @@ func (s *Server) listenTCP() {
 		for {
 			go func(client *net.TCPConn) {
 				b := bufio.NewReaderSize(client, readLen)
+				client.SetReadDeadline(time.Now().Add(5 * time.Second))
 				for {
 					buffer := make([]byte, 0)
 					for len(buffer) < readLen && (len(buffer) < len(s.Delim) || string(buffer[(len(buffer)-len(s.Delim)):len(buffer)]) != s.Delim) {
 						tmp_buf := make([]byte, readLen)
 						n, err := b.Read(tmp_buf)
+						if n > 0 {
+							client.SetReadDeadline(time.Now().Add(5 * time.Second))
+						}
 						if err != nil && err != io.EOF {
+							client.Close()
+							fmt.Printf("%v\n", err)
 							return
 						} else if err == io.EOF {
 							break

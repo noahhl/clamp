@@ -2,6 +2,7 @@ package clamp
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"net"
@@ -42,9 +43,15 @@ func NewServer(name string, addr string) *Server {
 func (s *Server) processBytes(buf []byte) {
 	pieces := strings.Split(string(buf), s.Delim)
 	for i := range pieces {
-		if len(pieces[i]) > 0 {
+		var piece string
+		if i > 0 {
+			piece = strings.TrimSpace(s.Delim + pieces[i])
+		} else {
+			piece = pieces[i]
+		}
+		if len(piece) > 0 {
 			select {
-			case s.MessageChannel <- pieces[i]:
+			case s.MessageChannel <- piece:
 				s.numProcessed += 1
 			default:
 				s.numDropped += 1
@@ -97,9 +104,10 @@ func (s *Server) listenTCP() {
 			go func(client *net.TCPConn) {
 				b := bufio.NewReaderSize(client, readLen)
 				client.SetReadDeadline(time.Now().Add(5 * time.Second))
+				buffer := make([]byte, 0)
+				bytesRead := 0
 				for {
-					buffer := make([]byte, 0)
-					for len(buffer) < readLen && (len(buffer) < len(s.Delim) || string(buffer[(len(buffer)-len(s.Delim)):len(buffer)]) != s.Delim) {
+					for bytesRead < readLen && (len(buffer) < len(s.Delim) || string(buffer[(len(buffer)-len(s.Delim)):len(buffer)]) != s.Delim) {
 						tmp_buf := make([]byte, readLen)
 						n, err := b.Read(tmp_buf)
 						if n > 0 {
@@ -108,13 +116,25 @@ func (s *Server) listenTCP() {
 						if err != nil && err != io.EOF {
 							client.Close()
 							fmt.Printf("%v\n", err)
+							s.processBytes(buffer)
 							return
 						} else if err == io.EOF {
 							break
 						}
 						buffer = append(buffer, tmp_buf[0:n]...)
+						bytesRead += n
 					}
-					s.processBytes(buffer)
+					if bytesRead >= readLen { //hit max readLen, rewind so we end at a delimiter, leave what's left in the buffer
+						i := bytes.LastIndex(buffer, []byte(s.Delim))
+						if i > 0 {
+							s.processBytes(buffer[0:i])
+							buffer = buffer[i:len(buffer)]
+						}
+					} else {
+						s.processBytes(buffer)
+						buffer = make([]byte, 0)
+					}
+					bytesRead = 0
 				}
 			}(<-conns)
 		}
